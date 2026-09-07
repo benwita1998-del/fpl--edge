@@ -17,7 +17,7 @@ function fixture(f,teams){const home=f.team_h===f.team_h;const isHome=f.team_h==
 function next5(p,b,gw){return (b.fixtures||[]).filter(f=>f.event!=null&&f.event>=gw&&(f.team_h===p.team||f.team_a===p.team)).sort((a,b)=>a.event-b.event).slice(0,5).map(f=>{const h=f.team_h===p.team;const opp=b.teams.find(t=>t.id===(h?f.team_a:f.team_h));return {event:f.event,opponent:opp?.short_name||'TBC',home:h,fdr:h?f.team_h_difficulty:f.team_a_difficulty,kickoff:f.kickoff_time}})}
 function ft(history,gw){let bank=0;for(const h of (history.current||[]).filter(x=>x.event<gw).sort((a,b)=>a.event-b.event)){const available=Math.min(5,bank+1);bank=Math.max(0,available-(h.event_transfers||0))}return Math.min(5,bank+1)}
 function sell(now,paid){now=+now;paid=+paid;if(now<=paid)return paid;return +(paid+Math.floor(((now-paid)/2)*10+1e-9)/10).toFixed(1)}
-async function load(){
+async function load(){const r=await fetch('https://raw.githubusercontent.com/benwita1998-del/fpl-edge/refs/heads/fpl-cache/data/live.json?'+Date.now(),{cache:'no-store'});
  $('#sub').textContent='Syncing official FPL data…';
  const b=await get('/bootstrap-static/');const gw=currentEvent(b);const [entry,history,transfers,picks]=await Promise.all([get(`/entry/${TEAM_ID}/`),get(`/entry/${TEAM_ID}/history/`),get(`/entry/${TEAM_ID}/transfers/`),get(`/entry/${TEAM_ID}/event/${gw.id}/picks/`).catch(()=>({picks:[]}))]);
  const teamMap=Object.fromEntries(b.teams.map(t=>[t.id,t]));const playerMap=Object.fromEntries(b.elements.map(p=>[p.id,p]));
