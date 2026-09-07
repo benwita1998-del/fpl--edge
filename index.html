@@ -17,14 +17,75 @@ function fixture(f,teams){const home=f.team_h===f.team_h;const isHome=f.team_h==
 function next5(p,b,gw){return (b.fixtures||[]).filter(f=>f.event!=null&&f.event>=gw&&(f.team_h===p.team||f.team_a===p.team)).sort((a,b)=>a.event-b.event).slice(0,5).map(f=>{const h=f.team_h===p.team;const opp=b.teams.find(t=>t.id===(h?f.team_a:f.team_h));return {event:f.event,opponent:opp?.short_name||'TBC',home:h,fdr:h?f.team_h_difficulty:f.team_a_difficulty,kickoff:f.kickoff_time}})}
 function ft(history,gw){let bank=0;for(const h of (history.current||[]).filter(x=>x.event<gw).sort((a,b)=>a.event-b.event)){const available=Math.min(5,bank+1);bank=Math.max(0,available-(h.event_transfers||0))}return Math.min(5,bank+1)}
 function sell(now,paid){now=+now;paid=+paid;if(now<=paid)return paid;return +(paid+Math.floor(((now-paid)/2)*10+1e-9)/10).toFixed(1)}
-async function load(){const r=await fetch('https://raw.githubusercontent.com/benwita1998-del/fpl-edge/refs/heads/fpl-cache/data/live.json?'+Date.now(),{cache:'no-store'});
- $('#sub').textContent='Syncing official FPL data…';
- const b=await get('/bootstrap-static/');const gw=currentEvent(b);const [entry,history,transfers,picks]=await Promise.all([get(`/entry/${TEAM_ID}/`),get(`/entry/${TEAM_ID}/history/`),get(`/entry/${TEAM_ID}/transfers/`),get(`/entry/${TEAM_ID}/event/${gw.id}/picks/`).catch(()=>({picks:[]}))]);
- const teamMap=Object.fromEntries(b.teams.map(t=>[t.id,t]));const playerMap=Object.fromEntries(b.elements.map(p=>[p.id,p]));
- const squad=(picks.picks||[]).map(x=>{const p=playerMap[x.element];return {...x,player:p,next5:next5(p,b,gw.id),selling:x.selling_price!=null?x.selling_price/10:sell(p.now_cost/10,p.now_cost/10)}});
- const allPlayers=b.elements.map(p=>({id:p.id,name:p.web_name,team:teamMap[p.team]?.name||'',team_short:teamMap[p.team]?.short_name||'',position:pos(p.element_type),element_type:p.element_type,price:p.now_cost/10,points:p.total_points,form:p.form,ppg:p.points_per_game,ownership:p.selected_by_percent,xg:p.expected_goals,xa:p.expected_assists,minutes:p.minutes,status:p.status,news:p.news,chance:p.chance_of_playing_this_round,next5:next5(p,b,gw.id)}));
- D={b,gw,entry,history,transfers,picks,teamMap,playerMap,squad,allPlayers,freeTransfers:ft(history,gw.id)};
- $('#sub').textContent=`${entry.name} · GW${gw.id} · ${entry.player_first_name} ${entry.player_last_name}`;render('home');
+async function load(){
+  $('#sub').textContent='Loading FPL Edge data…';
+
+  const r=await fetch('https://raw.githubusercontent.com/benwita1998-del/fpl-edge/refs/heads/fpl-cache/data/live.json?'+Date.now(),{cache:'no-store'});
+  if(!r.ok) throw new Error(`FPL cache ${r.status}`);
+
+  const j=await r.json();
+
+  const b=j.bootstrap;
+  const entry=j.entry;
+  const history=j.history;
+  const transfers=j.transfers||[];
+  const gw=currentEvent(b);
+
+  const picks=j.picks||{picks:[]};
+
+  const teamMap=Object.fromEntries(b.teams.map(t=>[t.id,t]));
+  const playerMap=Object.fromEntries(b.elements.map(p=>[p.id,p]));
+
+  const squad=(picks.picks||[]).map(x=>{
+    const p=playerMap[x.element];
+    return {
+      ...x,
+      player:p,
+      next5:next5(p,b,gw.id),
+      selling:x.selling_price!=null
+        ? x.selling_price/10
+        : sell(p.now_cost/10,p.now_cost/10)
+    };
+  });
+
+  const allPlayers=b.elements.map(p=>({
+    id:p.id,
+    name:p.web_name,
+    team:teamMap[p.team]?.name||'',
+    team_short:teamMap[p.team]?.short_name||'',
+    position:pos(p.element_type),
+    element_type:p.element_type,
+    price:p.now_cost/10,
+    points:p.total_points,
+    form:p.form,
+    ppg:p.points_per_game,
+    ownership:p.selected_by_percent,
+    xg:p.expected_goals,
+    xa:p.expected_assists,
+    minutes:p.minutes,
+    status:p.status,
+    news:p.news,
+    chance:p.chance_of_playing_this_round,
+    next5:next5(p,b,gw.id)
+  }));
+
+  D={
+    b,
+    gw,
+    entry,
+    history,
+    transfers,
+    picks,
+    teamMap,
+    playerMap,
+    squad,
+    allPlayers,
+    freeTransfers:ft(history,gw.id)
+  };
+
+  $('#sub').textContent=`${entry.name} · GW${gw.id} · ${entry.player_first_name} ${entry.player_last_name}`;
+  render('home');
+}
 }
 function stats(){return `<div class="grid">${[['Overall rank',Number(D.entry.summary_overall_rank||0).toLocaleString()],['Points',D.entry.summary_overall_points],['Team value',money(D.entry.last_deadline_value/10)],['Bank',money(D.entry.last_deadline_bank/10)],['Free transfers',D.freeTransfers],['GW transfers',D.history.current?.find(x=>x.event===D.gw.id)?.event_transfers||0],['Squad',D.squad.length],['Chips used',D.history.chips?.length||0]].map(x=>`<div class="card"><div class="label">${x[0]}</div><div class="big">${x[1]}</div></div>`).join('')}</div>`}
 function ftxt(f){return `<span class="pill">${f.home?'H':'A'} ${f.opponent} · FDR ${f.fdr}</span>`}
