@@ -19,9 +19,36 @@ app.use(express.static(path.join(__dirname, 'public')));
 function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return { prices: {}, snapshots: [], recommendations: [] }; } }
 function writeState(s) { fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2)); }
 async function fpl(endpoint) {
-  const r = await fetch(API + endpoint, { headers: { 'User-Agent': 'FPL-Edge/2.0' } });
-  if (!r.ok) throw new Error(`FPL API ${r.status}: ${endpoint}`);
-  return r.json();
+  const url = API + endpoint;
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const r = await fetch(url, {
+        method: 'GET',
+        redirect: 'follow',
+        headers: {
+          'Accept': 'application/json, text/plain, */*',
+          'Accept-Language': 'en-GB,en;q=0.9',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Referer': 'https://fantasy.premierleague.com/',
+          'Origin': 'https://fantasy.premierleague.com',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36'
+        }
+      });
+      const text = await r.text();
+      if (!r.ok) throw new Error(`FPL API ${r.status}: ${endpoint}`);
+      try { return JSON.parse(text); }
+      catch {
+        const preview = text.replace(/\s+/g, ' ').slice(0, 180);
+        throw new Error(`FPL returned non-JSON for ${endpoint}: ${preview}`);
+      }
+    } catch (e) {
+      lastError = e;
+      if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 600 * attempt));
+    }
+  }
+  throw lastError;
 }
 function pos(p) { return ({ 1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD' })[p.element_type] || '?'; }
 function enrich(b) {
